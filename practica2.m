@@ -1,0 +1,17 @@
+A= [0 1; -2 -3];
+B= [10; 20];
+C= [1 0];
+D= 0
+Pss=ss(A,B,C,D);
+Ptf=tf(Pss)
+Pzpk=zpk(Pss)
+Co=ctrb(A,B)
+Pd=[-3 -5];
+K1=[0 1]*Co^-1*(A^2+8*A+15*eye(2))
+K2=acker(A,B,Pd)
+N=-(C*inv(A-B*K2)*B)\eye(1,1)
+Acl=A-B*K1
+Bcl=B*N
+Pclss=ss(Acl,Bcl,C,D)
+Pcltf=tf(Pclss)
+Pclzpk=zpk(Pclss)
