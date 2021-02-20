@@ -47,20 +47,20 @@ alpha=20; % ¿?
 DPc_dominant = roots(conv([1 2*z*wn wn^2], poly([-alpha*wn+2i -alpha*wn-2i -alpha*wn])));
 
 % 2. 'K'
-Kbessel = place(A1,B1,DPc_bessel);
-Kitae = place(A1,B1,DPc_itae);
-Kdominant = place(A1,B1,DPc_dominant);
+K_bessel = place(A1,B1,DPc_bessel);
+K_itae = place(A1,B1,DPc_itae);
+K_dominant = place(A1,B1,DPc_dominant);
 
 % 3. Pre-filter
-Nbbessel=-(C*(A-B*Kbessel)^-1*B)\eye(q,q);
-Nbitae=-(C*(A-B*Kitae)^-1*B)\eye(q,q);
-Nbdominant=-(C*(A-B*Kdominant)^-1*B)\eye(q,q);
+Nb_bessel=-(C*(A-B*K_bessel)^-1*B)\eye(q,q);
+Nb_itae=-(C*(A-B*K_itae)^-1*B)\eye(q,q);
+Nb_dominant=-(C*(A-B*K_dominant)^-1*B)\eye(q,q);
 
 % 4. Plant with controller
 Dc=zeros(q,q);
-Pc_bessel = ss(A-B*Kbessel,B*Nbbessel,C,Dc);
-Pc_itae = ss(A-B*Kitae,B*Nbitae,C,Dc);
-Pc_dominant = ss(A-B*Kdominant,B*Nbdominant,C,Dc);
+Pc_bessel = ss(A-B*K_bessel,B*Nb_bessel,C,Dc);
+Pc_itae = ss(A-B*K_itae,B*Nb_itae,C,Dc);
+Pc_dominant = ss(A-B*K_dominant,B*Nb_dominant,C,Dc);
 
 CI=[-5*pi/180 -pi*5/180 0 0 0]; % Note that CI are different cause linearization
 
@@ -69,11 +69,11 @@ t=0:0.01:5;
 r=[zeros(size(t)); (pi*180/180)*ones(size(t))];
 
 [Ybessel,~,X]=lsim(Pc_bessel, r, t, CI);
-U_bessel = Nbbessel*r - Kbessel*X';
+U_bessel = Nb_bessel*r - K_bessel*X';
 [Yitae,~,X]=lsim(Pc_itae, r, t, CI);
-U_itae = Nbitae*r - Kitae*X';
+U_itae = Nb_itae*r - K_itae*X';
 [Ydominant,T,X]=lsim(Pc_dominant, r, t, CI);
-U_dominant = Nbdominant*r - Kdominant*X';
+U_dominant = Nb_dominant*r - K_dominant*X';
 
 % 6. Plot
 % To degrees and add operation point to output cause linearization
@@ -161,4 +161,74 @@ xlabel('Time(s)')
 ylabel('Error(%)')
 
 %% Controller + Observer, K+L
+% K, L previously computed remain same
+% N previously computed remain same if N=BM
+% 1. Close loop plant
+% 1.1 Bessel
+Acl_bessel=[(A-B*K_bessel) B*K_bessel; zeros(n,n) (A-L_bessel*C)];
+Bcl_bessel=[B*Nb_bessel; zeros(n,q)];
+Ccl_bessel=[C zeros(q,n)];
+Dcl_bessel=zeros(q,q);
+
+Poc_bessel=ss(Acl_bessel,Bcl_bessel,Ccl_bessel,Dcl_bessel);
+
+% 1.2 Itae
+Acl_itae=[(A-B*K_itae) B*K_itae; zeros(n,n) (A-L_itae*C)];
+Bcl_itae=[B*Nb_itae; zeros(n,q)];
+Ccl_itae=[C zeros(q,n)];
+Dcl_itae=zeros(q,q);
+
+Poc_itae=ss(Acl_itae,Bcl_itae,Ccl_itae,Dcl_itae);
+
+% 1.3 Dominant
+Acl_dominant=[(A-B*K_dominant) B*K_dominant; zeros(n,n) (A-L_dominant*C)];
+Bcl_dominant=[B*Nb_dominant; zeros(n,q)];
+Ccl_dominant=[C zeros(q,n)];
+Dcl_dominant=zeros(q,q);
+
+Poc_dominant=ss(Acl_dominant,Bcl_dominant,Ccl_dominant,Dcl_dominant);
+
+% 2. Simulate
+CI=[-5*pi/180 -pi*5/180 0 0 0 zeros(1,n)]; % Note that CI are different cause linearization
+t=0:0.01:5;
+r=[zeros(size(t)); (pi*180/180)*ones(size(t))];
+
+[Yoc_bessel,~,X]=lsim(Poc_bessel, r, t, CI);
+X=X';
+Uoc_bessel=Nb_bessel*r-K_bessel*(X(1:5,:)-X(6:10,:));
+
+[Yoc_itae,~,X]=lsim(Poc_itae, r, t, CI);
+X=X';
+Uoc_itae=Nb_itae*r-K_itae*(X(1:5,:)-X(6:10,:));
+
+[Yoc_dominant,T,X]=lsim(Poc_dominant, r, t, CI);
+X=X';
+Uoc_dominant = Nb_dominant*r - K_dominant*(X(1:5,:)-X(6:10,:));
+
+% 3. Plot
+% To degrees and add operation point to output cause linearization
+Yoc_bessel=(Yoc_bessel+r')*180/pi;
+Yoc_itae=(Yoc_itae+r')*180/pi;
+Yoc_dominant=(Yoc_dominant+r')*180/pi;
+r=(r')*180/pi;
+T = [T T];
+
+fig_count=fig_count+1;
+figure(fig_count)
+
+subplot(2,1,1)
+plot(T,Yoc_bessel,'r',T,Yoc_itae,'g',T,Yoc_dominant,'b',T,r,'--k')
+legend('X1-Bessel','X2-Bessel','X1-ITAE','X2-ITAE','X1-Dominant','X2-Dominant','X1-reference','X2-reference')
+title('Output')
+xlabel('Time(s)')
+ylabel('Output(degrees)')
+
+T=T(:,1);
+subplot(2,1,2)
+plot(T,Uoc_bessel,'r',T,Uoc_itae,'g',T,Uoc_dominant,'b')
+legend('U-Bessel','U-ITAE','U-Dominant')
+title('Control signal')
+xlabel('Time(s)')
+ylabel('Input(V)')
+
 
